@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>7J Finance - BDM Portal &amp; Call Guide</title>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  <link rel="stylesheet" href="css/portal.css">
+</head>
+<body>
+<!-- ==========================================
+     LOGIN SCREEN OVERLAY
+     ========================================== -->
+<div id="loginOverlay">
+<div class="login-card">
+<h2>7J Finance Portal</h2>
+<div class="login-error" id="loginError">Sign-in was not completed.</div>
+<button class="ms-login-btn" onclick="handleLogin()" type="button">
+<svg height="20" style="vertical-align:middle; margin-right:10px;" viewbox="0 0 23 23" width="20" xmlns="http://www.w3.org/2000/svg"><path d="M1 1h9v9H1z" fill="#f3f3f3"></path><path d="M0 0h10v10H0V0zm1 1v8h8V1H1z" fill="#737373"></path><path d="M0 12h10v10H0z" fill="#f25022"></path><path d="M12 0h10v10H12z" fill="#7fba00"></path><path d="M12 12h10v10H12z" fill="#00a4ef"></path></svg>
+            Sign in with Microsoft 365
+        </button>
+<button id="frontHomeBtn" type="button" aria-label="Home" title="Home" onclick="frontPageHome()" style="display:none;width:46px;height:46px;border-radius:50%;border:1px solid rgba(255,255,255,.35);background:#fff;color:#154a28;font-size:22px;cursor:pointer;margin:0 auto 12px;box-shadow:0 6px 18px rgba(0,0,0,.18);">⌂</button>
+<p style="font-size:12px; color:var(--muted); text-align:center; margin-top:14px;">Use your Microsoft 365 work account. For a leased deployment, an administrator can configure the customer tenant and SharePoint site before first sign-in.</p>
+<button type="button" class="btn secondary" onclick="openLoginOrganisationSetup()" style="width:100%;margin-top:12px;">⚙ Organisation / Microsoft 365 setup</button>
+<div id="demoLoginPanel" data-demo-visible="false" aria-hidden="true" style="margin-top:14px;padding:14px;border:1px solid #d9e4dc;border-radius:14px;background:#f7fbf8;">
+  <div style="font-size:12px;font-weight:800;color:#154a28;margin-bottom:9px;text-align:center;">Demo Mode — choose a user</div>
+  <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;">
+    <button type="button" class="btn secondary demo-user-btn" onclick="enterLocalDemoMode('admin')">Admin<br><small>Tim</small></button>
+    <button type="button" class="btn secondary demo-user-btn" onclick="enterLocalDemoMode('bdm1')">BDM<br><small>Sarah</small></button>
+    <button type="button" class="btn secondary demo-user-btn" onclick="enterLocalDemoMode('bdm2')">BDM<br><small>James</small></button>
+  </div>
+  <div style="font-size:10px;color:var(--muted);text-align:center;margin-top:8px;">Local only — no Microsoft 365 connection.</div>
+</div>
+</div>
+</div>
+<div class="panel-overlay" id="loginOrganisationSetupModal" style="z-index:10000;">
+  <div class="panel" style="max-width:620px;position:relative;">
+    <button class="close-x" type="button" onclick="closeLoginOrganisationSetup()" aria-label="Close organisation setup">✕</button>
+    <h2 style="margin-bottom:6px;">Organisation &amp; Microsoft 365 setup</h2>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:12px;">Use this for first-time customer onboarding. It changes this browser's configuration only until the administrator publishes the same values through Global Portal Settings. Never enter a client secret here.</p>
+    <div class="form-row">
+      <div><label>Company / portal name</label><input id="loginCompanyName" placeholder="7J Finance" type="text"></div>
+      <div><label>Microsoft Entra tenant ID</label><input id="loginTenantId" placeholder="Customer tenant GUID" type="text"></div>
+    </div>
+    <div class="form-row">
+      <div><label>SharePoint host</label><input id="loginSharePointHost" placeholder="customer.sharepoint.com" type="text"></div>
+      <div><label>SharePoint site path</label><input id="loginSitePath" placeholder="/sites/BDM" type="text"></div>
+    </div>
+    <label class="toggle-row" for="loginMultitenant">
+      <input id="loginMultitenant" type="checkbox">
+      <span class="toggle-switch"></span>
+      <span class="toggle-label">Use multitenant Microsoft Entra sign-in</span>
+      <span class="toggle-state">OFF</span>
+    </label>
+    <div class="setting-note" style="margin-top:12px;"><strong>Application (client) ID:</strong> <code id="loginClientIdReadOnly"></code><br>Do not enter a client secret. For a SaaS deployment Microsoft recommends a multitenant app registration for users in multiple organisations.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+      <button class="btn" type="button" onclick="saveLoginOrganisationSetup()">Save &amp; continue</button>
+      <button class="btn secondary" type="button" onclick="closeLoginOrganisationSetup()">Cancel</button>
+    </div>
+    <div class="status-msg" id="loginOrganisationSetupStatus"></div>
+  </div>
+</div>
+<header>
+<h1 data-company-name>7J Finance</h1>
+<nav class="master-nav">
+<button aria-label="Home" class="home-icon-btn active" id="navHome" onclick="switchMasterView('home')" title="Home" type="button">⌂</button>
+<button aria-label="Display settings" class="display-settings-btn" id="displaySettingsBtn" onclick="toggleDisplaySettings(event)" title="Display settings" type="button">⚙</button>
+<button aria-expanded="false" aria-haspopup="true" class="master-menu-btn" onclick="toggleMasterMenu(event)" title="Open menu" type="button">☰</button>
+<div class="master-menu" id="masterMenu" role="menu">
+<button onclick="switchMasterView('portal')" type="button">👥 Broker Pipeline</button>
+<button onclick="switchMasterView('calendar')" type="button">📅 Calendar</button>
+<button onclick="switchMasterView('kpi')" type="button">📊 KPI Dashboard</button>
+<button onclick="openPortalUtility('upload')" type="button">⬆ Upload Brokers</button>
+<button onclick="openPortalUtility('dialer')" type="button">☎ Call Queue</button>
+<button id="hamburgerAdminBtn" data-admin-menu="true" onclick="openPortalUtility('admin')" type="button">⚙ Admin Centre</button>
+<button onclick="switchMasterView('guide')" type="button">📖 Call Guide &amp; Scripts</button>
+</div>
+</nav>
+<div class="userbox">
+<span id="userbox">Microsoft 365</span>
+<span class="role-badge" id="roleBadge" style="display:none;">Admin</span>
+<button id="logoutBtn" type="button" class="logout-btn">Sign Out</button>
+</div>
+</header>
+<div id="launchSyncBanner" role="status" aria-live="polite"></div>
+<!-- ==========================================
+     HOME / COMMAND CENTRE
+     ========================================== -->
+<div class="app-view" id="homeView" style="display:flex;max-width:1200px;margin:24px auto;padding:0 18px;width:100%;flex-direction:column;">
+<div class="home-hero">
+<div><div class="kpi-eyebrow hero-3d-text"><span data-company-name>7J Finance</span> WORKSPACE</div><h2 id="homeWelcome">Welcome</h2><p id="homeUserInfo">Your portal command centre.</p></div>
+<div class="home-role-badge" id="homeRoleBadge">BDM</div>
+</div>
+<div class="home-grid">
+<button class="home-tile" onclick="switchMasterView('portal')"><span>👥</span><strong>Broker Pipeline</strong><small>Open, assigned and unsuitable brokers</small></button>
+<button class="home-tile" onclick="switchMasterView('calendar')"><span>📅</span><strong>Calendar</strong><small>Teams / Microsoft 365 appointments</small></button>
+<button class="home-tile" onclick="switchMasterView('kpi')"><span>📊</span><strong>KPI Dashboard</strong><small>KPIs, deals and rankings</small></button>
+<button class="home-tile" onclick="openPortalUtility('upload')"><span>⬆</span><strong>Upload Brokers</strong><small>Bulk import and duplicate protection</small></button>
+<button class="home-tile" onclick="openPortalUtility('dialer')"><span>☎</span><strong>Call Queue</strong><small>Power dialler and outcomes</small></button>
+<button class="home-tile admin-home-tile" onclick="openPortalUtility('admin')"><span>⚙</span><strong>Admin Centre</strong><small>Global settings and system controls</small></button>
+<button class="home-tile" onclick="switchMasterView('guide')"><span>📖</span><strong>Call Guide</strong><small>Scripts and qualification prompts</small></button>
+</div>
+</div>
+<!-- ==========================================
+     VIEW 1: BROKER MANAGEMENT PORTAL
+     ========================================== -->
+<div class="app-view" id="portalView">
+<div class="sub-nav modern-sub-nav">
+<button class="active" data-view="open" onclick="setPipelineView('open')" type="button">Open Brokers</button>
+<button data-view="mine" onclick="setPipelineView('mine')" type="button">My Brokers</button>
+<button data-view="notSuitable" onclick="setPipelineView('notSuitable')" type="button">Not Suitable</button>
+</div>
+<div class="not-suitable-filter-wrap" id="notSuitableOutcomeFilterWrap" style="display:none;">
+<label for="notSuitableOutcomeFilter">Outcome filter</label>
+<select id="notSuitableOutcomeFilter">
+<option value="all">All not-suitable outcomes</option>
+</select>
+</div>
+<div class="config-warning" id="configWarning" style="display:none;"></div>
+<div id="listView">
+<section class="ai-broker-search" id="aiBrokerSearchPanel" style="display:none;">
+<div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;">
+<div><strong style="font-size:15px;color:var(--primary-dark);">✨ AI New Broker Finder</strong><div style="font-size:12px;color:var(--muted);margin-top:3px;">Search for new broker prospects and add suitable results to the open broker pool.</div></div>
+<span style="font-size:10px;font-weight:800;color:#6264a7;background:#eef0ff;padding:5px 8px;border-radius:999px;">ADMIN CONTROLLED</span>
+</div>
+<div class="ai-row" style="margin-top:11px;">
+<input id="aiBrokerSearchInput" placeholder="e.g. UK mortgage broker specialising in bridging finance in South Wales" type="search"/>
+<button class="btn" onclick="runAIBrokerSearch()" type="button">Search prospects</button>
+</div>
+<div class="status-msg" id="aiBrokerSearchStatus"></div>
+<div class="ai-results" id="aiBrokerSearchResults"></div>
+</section>
+<div class="toolbar">
+<input id="searchBox" placeholder="Search by name, company, email…" type="search"/>
+<button class="btn" id="addNewBrokerBtn" style="padding:8px 12px; font-size:13px;" type="button">+ Add Broker</button>
+</div>
+<div class="filter-bar" id="pipelineFilters">
+<select aria-label="Filter by status" id="filterStatus" onchange="render()"><option value="all">All Statuses</option></select>
+<select aria-label="Filter by loan type" id="filterLoanType" onchange="render()"><option value="all">All Loan Types</option></select>
+<select aria-label="Filter by network" id="filterNetwork" onchange="render()"><option value="all">All Networks</option></select>
+<select aria-label="Filter by volume" id="filterVolume" onchange="render()"><option value="all">All Volumes</option></select>
+<select aria-label="Filter by city" id="filterCity" onchange="render()"><option value="all">All Cities</option></select>
+<select aria-label="Sort" id="filterSort" onchange="render()">
+<option value="recent">Sort: Recently added</option>
+<option value="contactNew">Sort: Last contact (newest)</option>
+<option value="contactOld">Sort: Last contact (oldest)</option>
+<option value="name">Sort: Name A–Z</option>
+</select>
+<button class="btn-clear" onclick="clearPipelineFilters()" type="button">Clear filters</button>
+<span class="filter-count" id="pipelineFilterCount"></span>
+</div>
+<div class="status-msg" id="statusMsg"></div>
+<div id="cardList"></div>
+</div>
+<div id="uploadView" style="display:none;">
+<h2>Bulk upload brokers</h2>
+<p style="color:var(--muted);font-size:13px;">
+            Upload an .xlsx or .csv file. The first row should be column headers. Map your columns below, then submit.
+        </p>
+<div class="upload-box" id="dropZone" style="margin-top:10px;">
+<p>Drag a file here, or</p>
+<input accept=".xlsx,.xls,.csv" id="fileInput" type="file"/>
+</div>
+<div id="mappingArea" style="margin-top:16px;display:none;"></div>
+<div id="previewArea"></div>
+<div class="panel-actions" style="margin-top:16px; border-top:none;">
+<button class="btn" id="submitUploadBtn" style="display:none;" type="button">Create broker records</button>
+</div>
+<div class="status-msg" id="uploadStatus"></div>
+</div>
+<div id="adminView" style="display:none;">
+<h2>Admin Management Centre</h2>
+<!-- Role-based gate for Admin Area -->
+<div id="adminPasswordGate" style="background:#fff; border:1px solid var(--border); padding:20px; border-radius:var(--radius); margin-bottom:20px;">
+<h3 style="font-size:15px; color:var(--primary-dark); margin-bottom:8px;">🔒 Admin Area</h3>
+<p style="font-size:13px; color:var(--muted); margin-bottom:12px;">Access to user management, exports, and system controls is restricted to administrators. Your Microsoft 365 role is checked automatically.</p>
+<button class="btn" onclick="unlockAdminCentre()" type="button">Enter Admin Area</button>
+<div id="adminUnlockError" style="color:var(--red); font-size:12px; margin-top:6px; display:none;">Only administrators can access this area.</div>
+</div>
+<!-- Unlocked Admin Content -->
+<div id="adminUnlockedContent" style="display:none;">
+<!-- Team Roster (auto-populated from Microsoft 365 sign-ins) -->
+<div style="background:#fff; border:1px solid var(--border); padding:16px; border-radius:var(--radius); margin-bottom:20px;">
+<h3 style="font-size:15px; color:var(--primary-dark); margin-bottom:10px;">BDM Team Roster</h3>
+<p style="font-size:12px; color:var(--muted); margin-bottom:12px;">People are added here automatically the first time they sign in with their 7J Finance Microsoft 365 account. No manual user management is needed — access is controlled by who is in your organisation's Entra ID, and admins are set by email in the portal's <code>M365_CONFIG</code> block (currently <strong>naz@7jfinance.com</strong>).</p>
+<div class="status-msg" id="userManageStatus"></div>
+<div id="userTableList"></div>
+</div>
+<!-- SharePoint List Sources (admin override, per device) -->
+<div style="background:#fff; border:1px solid var(--border); padding:16px; border-radius:var(--radius); margin-bottom:20px;">
+<h3 style="font-size:15px; color:var(--primary-dark); margin-bottom:6px;">📁 SharePoint List Sources</h3>
+<p style="font-size:12px; color:var(--muted); margin-bottom:12px;">Select the exact Microsoft List display names used by the portal. Test verifies that each list exists on the configured SharePoint site; Save stores the selection on this device and clears cached list/record mappings so the app reloads against the selected sources.</p>
+<div class="status-msg" id="listSourceStatus"></div>
+<div style="display:grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap:8px; align-items:end;">
+<div>
+<label style="font-size:11px; font-weight:600; color:var(--muted);">Brokers list name</label>
+<input id="listNameBrokers" placeholder="BDM Brokers" style="padding:7px; font-size:13px; border:1px solid var(--border); border-radius:var(--radius); width:100%;" type="text"/>
+</div>
+<div>
+<label style="font-size:11px; font-weight:600; color:var(--muted);">Users list name</label>
+<input id="listNameUsers" placeholder="BDM Users" style="padding:7px; font-size:13px; border:1px solid var(--border); border-radius:var(--radius); width:100%;" type="text"/>
+</div>
+<div>
+<label style="font-size:11px; font-weight:600; color:var(--muted);">Account audit list</label>
+<input id="listNameAuditAccount" placeholder="BDM Audit - Account Changes" style="padding:7px; font-size:13px; border:1px solid var(--border); border-radius:var(--radius); width:100%;" type="text"/>
+</div>
+<div>
+<label style="font-size:11px; font-weight:600; color:var(--muted);">Dialler audit list</label>
+<input id="listNameAuditDialer" placeholder="BDM Audit - Dialler Activity" style="padding:7px; font-size:13px; border:1px solid var(--border); border-radius:var(--radius); width:100%;" type="text"/>
+</div>
+<div>
+<label style="font-size:11px; font-weight:600; color:var(--muted);">Deals list</label>
+<input id="listNameDeals" placeholder="BDM Deals" style="padding:7px; font-size:13px; border:1px solid var(--border); border-radius:var(--radius); width:100%;" type="text"/>
+</div>
+<div>
+<label style="font-size:11px; font-weight:600; color:var(--muted);">Global Portal Settings list</label>
+<input id="listNameGlobalSettings" placeholder="BDM Global Settings" style="padding:7px; font-size:13px; border:1px solid var(--border); border-radius:var(--radius); width:100%;" type="text"/>
+</div>
+<div style="display:flex; gap:6px;">
+<button class="btn secondary" onclick="testListSources()" style="padding:7px 12px; font-size:13px;" type="button">Test</button>
+<button class="btn" onclick="saveListSources()" style="padding:7px 12px; font-size:13px;" type="button">Save</button>
+</div>
+<div><label style="font-size:11px; font-weight:600; color:var(--muted);">Call Guide list name</label><input id="listNameCallGuide" placeholder="BDM Call Guide" style="padding:7px; font-size:13px; border:1px solid var(--border); border-radius:var(--radius); width:100%;" type="text"/></div><div><label style="font-size:11px;font-weight:600;color:var(--muted);">Performance Reviews list</label><input id="listNamePerformanceReviews" placeholder="BDM Performance Reviews" style="padding:7px;font-size:13px;border:1px solid var(--border);border-radius:var(--radius);width:100%;" type="text"/></div><div><label style="font-size:11px;font-weight:600;color:var(--muted);">KPI Snapshots list</label><input id="listNameKpiSnapshots" placeholder="BDM KPI Snapshots" style="padding:7px;font-size:13px;border:1px solid var(--border);border-radius:var(--radius);width:100%;" type="text"/></div><div><label style="font-size:11px;font-weight:600;color:var(--muted);">Backup Manifest list</label><input id="listNameBackupManifest" placeholder="BDM System Backup Manifest" style="padding:7px;font-size:13px;border:1px solid var(--border);border-radius:var(--radius);width:100%;" type="text"/></div></div>
+<p style="font-size:11px; color:var(--muted); margin-top:8px;">Tip: create the required Microsoft Lists on the same SharePoint site first, enter their exact display names, then click Test. Performance Reviews columns: Title, ReviewId, BDMName, BDMEmail, ReviewDate, ReviewPeriod, Target, AdminNote, BDMResponse, ResponseDate, AdminBy, Updated, UpdatedBy. KPI Snapshots columns: Title, SnapshotId, SnapshotDate, BDM, Period, CustomStart, CustomEnd, TotalCalls, Appointments, Deals, DealValue, NotSuitable, UpdatedBy. Backup Manifest columns: Title, BackupDate, Version, CreatedBy, ListsJSON, DataSetsJSON. The Deals and Call Guide lists are also checked. For Call Guide create columns: Title, SectionKey, Content (multiple lines of text), SortOrder, Active, Updated, UpdatedBy. For the Broker List also add optional WorkflowStateUpdatedAt (Date and Time) for robust state-reset protection.</p>
+</div>
+<!-- Audit Workflow & Discarded Records Archive (Admin Only) -->
+<div style="background:#fff; border:1px solid var(--border); padding:16px; border-radius:var(--radius); margin-bottom:20px;">
+<h3 style="font-size:15px; color:var(--primary-dark); margin-bottom:10px;">🛡️ Audit Trails &amp; Discarded Records Archive</h3>
+<p style="font-size:12px; color:var(--muted); margin-bottom:12px;">Account changes and dialler activity are kept as separate audit trails. Timestamps are immutable in the portal and each trail can be filtered independently.</p>
+<div class="filter-bar" style="margin-bottom:10px;">
+<input id="auditSearchBox" oninput="renderAuditLog()" placeholder="Search account-change audit…" style="max-width:none;" type="search"/>
+<select aria-label="Filter account-change action" id="auditFilterAction" onchange="renderAuditLog()"><option value="all">All Actions</option></select>
+<select aria-label="Filter account-change user" id="auditFilterUser" onchange="renderAuditLog()"><option value="all">All Users</option></select>
+<button class="btn-clear" onclick="clearAuditFilters()" type="button">Clear</button>
+</div>
+<div style="font-size:12px;font-weight:700;color:var(--primary-dark);margin:8px 0 6px;">Account Changes</div>
+<div id="auditLogContainer" style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius);"></div>
+<div class="filter-bar" style="margin:16px 0 10px;">
+<input id="dialerAuditSearchBox" oninput="renderDialerAuditLog()" placeholder="Search dialler activity…" style="max-width:none;" type="search"/>
+<select aria-label="Filter dialler action" id="dialerAuditFilterAction" onchange="renderDialerAuditLog()"><option value="all">All Actions</option></select>
+<select aria-label="Filter dialler user" id="dialerAuditFilterUser" onchange="renderDialerAuditLog()"><option value="all">All Users</option></select>
+<button class="btn-clear" onclick="clearDialerAuditFilters()" type="button">Clear</button>
+</div>
+<div style="font-size:12px;font-weight:700;color:var(--primary-dark);margin:8px 0 6px;">Dialler Activity</div>
+<div id="dialerAuditLogContainer" style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius);"></div>
+</div>
+<!-- Broker release policy -->
+<div style="background:#fff; border:1px solid var(--border); padding:16px; border-radius:var(--radius); margin-bottom:20px;">
+<h3 style="font-size:15px; color:var(--primary-dark); margin-bottom:6px;">⏱ Broker Release / Refresh Policy</h3>
+<p style="font-size:12px; color:var(--muted); margin-bottom:12px;">Set how many days an assigned broker can remain inactive before the portal automatically releases them back into the open pool. The current default is 42 days (6 weeks).</p>
+<div style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;">
+<div style="min-width:220px;">
+<label style="font-size:11px;font-weight:600;color:var(--muted);">Inactive days</label>
+<input id="brokerReleaseDays" max="3650" min="1" step="1" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:var(--radius);" type="number"/>
+</div>
+<button class="btn" onclick="saveBrokerReleaseDays()" type="button">Save setting</button>
+<button class="btn secondary" onclick="resetBrokerReleaseDays()" type="button">Reset to 42 days</button>
+</div>
+<div class="status-msg" id="brokerReleaseDaysStatus" style="margin-top:8px;"></div>
+</div>
+<!-- Global Settings -->
+<div style="background:#fff; border:1px solid var(--border); padding:16px; border-radius:var(--radius); margin-bottom:20px;">
+<h3 style="font-size:15px; color:var(--primary-dark); margin-bottom:6px;">🌐 Global Portal Settings</h3>
+<p style="font-size:12px;color:var(--muted);margin-bottom:12px;">These settings are stored in the Microsoft List <strong>BDM Global Settings</strong> so the whole team uses the same configuration. Create the list with columns: Title, SettingKey, SettingValue, Updated, UpdatedBy.</p>
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;">
+<div><label style="font-size:11px;font-weight:600;color:var(--muted);">Global broker release days</label><input id="globalReleaseDays" max="3650" min="1" step="1" type="number"/></div>
+<div class="global-ai-setting">
+  <div class="global-setting-copy">
+    <label for="globalAIEnabled">AI broker search</label>
+    <span>Show or hide AI New Broker Finder for the team.</span>
+  </div>
+  <label class="admin-toggle" for="globalAIEnabled">
+    <input id="globalAIEnabled" class="admin-toggle-input" type="checkbox" checked aria-describedby="globalAIEnabledState">
+    <span class="admin-toggle-track" aria-hidden="true"><span class="admin-toggle-thumb"></span></span>
+    <span class="admin-toggle-state" id="globalAIEnabledState">Enabled</span>
+  </label>
+</div>
+<div><label style="font-size:11px;font-weight:600;color:var(--muted);">AI API key</label><input id="globalAIKey" placeholder="Stored in global settings" type="password"/></div>
+<div><label style="font-size:11px;font-weight:600;color:var(--muted);">AI model</label><input id="globalAIModel" placeholder="e.g. gpt-5.6-mini" type="text" value="gpt-5.6-mini"/></div>
+<div><label style="font-size:11px;font-weight:600;color:var(--muted);">AI search result threshold (max 25)</label><input id="globalAIThreshold" max="25" min="1" type="number" value="25"/></div>
+<div><label style="font-size:11px;font-weight:600;color:var(--muted);">Azure AI proxy endpoint</label><input id="globalAIProxy" placeholder="https://your-function.azurewebsites.net/api/broker-search" type="url"/></div>
+<div><label style="font-size:11px;font-weight:600;color:var(--muted);">Live broker refresh (seconds)</label><input id="globalLiveRefresh" max="300" min="15" step="5" type="number" value="30"/></div>
+<div><label style="font-size:11px;font-weight:600;color:var(--muted);">Claim timestamp window (minutes)</label><input id="globalClaimMinutes" max="30" min="1" step="1" type="number" value="5"/></div>
+</div>
+<div class="setting-note"><strong>Recommended production setup — Azure AI proxy</strong><br/>1. Create an Azure Function (HTTP trigger) called <code>broker-search</code>. 2. Store the OpenAI API key in the Function App setting <code>OPENAI_API_KEY</code> (never in this HTML or a Microsoft List). 3. Configure the function to accept <code>{query, maxResults}</code>, call the OpenAI Responses API with web search, validate the returned broker records, and return a JSON array. 4. Paste the HTTPS function URL into <strong>Azure AI proxy endpoint</strong> above. 5. Save settings and test in Demo Mode first. The portal will then call the proxy instead of exposing the key. The API-key field below is retained only for legacy/demo use and should be left blank in production.</div>
+<details style="margin-top:12px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:10px;"><summary style="cursor:pointer;font-weight:700;font-size:12px;">Azure Function setup instructions</summary><div style="font-size:12px;line-height:1.6;margin-top:10px;color:var(--muted);">In Azure Portal: <strong>Function App → Functions → Create → HTTP trigger</strong>. Name it <code>broker-search</code>. Add application setting <code>OPENAI_API_KEY</code>. Restrict CORS to your portal domain. Have the function call the OpenAI Responses API using web search and request up to the received <code>maxResults</code> (never more than 25). Validate email/phone/domain where possible, remove duplicates, and return only JSON objects with <code>name, company, phone, email, website, city, reason</code>. Enable authentication/API Management in production rather than leaving an unrestricted HTTP endpoint.</div></details>
+<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;"><button class="btn" onclick="saveGlobalPortalSettings()" type="button">Save global settings</button><button class="btn secondary" onclick="loadGlobalPortalSettings(true)" type="button">Reload from Microsoft List</button></div>
+<div class="status-msg" id="globalSettingsStatus"></div>
+</div>
+<!-- Data Health -->
+<div id="callGuideAdminCard" style="background:#fff; border:1px solid var(--border); padding:16px; border-radius:var(--radius); margin-bottom:20px;"><h3 style="font-size:15px;color:var(--primary-dark);margin-bottom:6px;">📖 Call Guide &amp; Scripts Editor</h3><p style="font-size:12px;color:var(--muted);margin-bottom:12px;">Admins can edit the existing guide, add new sections, reorder them and enable/disable sections. Changes can be saved to the shared Microsoft List so every BDM sees the same guide. In Microsoft 365 mode the content is stored in the shared <strong>BDM Call Guide</strong> List so every BDM sees the same guide. Demo Mode stores it locally.</p><div style="display:grid;grid-template-columns:minmax(220px,.8fr) minmax(0,2fr);gap:12px;align-items:start;"><div><label style="font-size:11px;font-weight:700;color:var(--muted);">Section</label><select id="guideAdminSectionSelect" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:10px;"></select><div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:10px;"><button class="btn secondary" onclick="newCallGuideSection()" type="button">＋ New section</button><button class="btn secondary" onclick="publishDefaultCallGuide()" type="button">Publish defaults</button><button class="btn danger" onclick="deleteCallGuideSection()" type="button">Delete section</button></div><div class="status-msg" id="guideAdminStatus" style="margin-top:10px;"></div></div><div><div class="form-row"><div><label style="font-size:11px;font-weight:700;color:var(--muted);">Title</label><input id="guideAdminTitle" placeholder="Section title" type="text"/></div><div><label style="font-size:11px;font-weight:700;color:var(--muted);">Sort order</label><input id="guideAdminSort" min="1" step="1" type="number"/></div></div><label style="font-size:11px;font-weight:700;color:var(--muted);">Content</label><div contenteditable="true" id="guideAdminContent" style="min-height:240px;border:1px solid var(--border);border-radius:12px;padding:12px;background:#fff;overflow:auto;line-height:1.55;"></div><label class="toggle-row" for="guideAdminActive">
+      <input checked id="guideAdminActive" type="checkbox">
+      <span class="toggle-switch"></span>
+      <span class="toggle-label">Show this section to BDMs</span>
+      <span class="toggle-state">ON</span>
+    </label><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;"><button class="btn" onclick="saveCallGuideSection()" type="button">Save section</button><button class="btn secondary" onclick="reloadCallGuideFromSource(true)" type="button">Reload shared guide</button></div></div></div><div class="setting-note" style="margin-top:12px;"><strong>Microsoft List columns:</strong> Title, SectionKey, Content (multiple lines of text), SortOrder, Active, Updated, UpdatedBy. The portal uses SectionKey as the stable identifier.</div></div><div id="organisationSettingsCard" style="background:#fff;border:1px solid var(--border);padding:16px;border-radius:var(--radius);margin-bottom:20px;"><h3 style="font-size:15px;color:var(--primary-dark);margin-bottom:6px;">🏢 Organisation &amp; Microsoft 365 Connection</h3><p style="font-size:12px;color:var(--muted);margin-bottom:12px;">For a leased or multi-company deployment, keep the application/client ID in the multitenant Entra app registration and configure the customer organisation's tenant and SharePoint site here. Do not put a client secret in the HTML.</p><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;"><div><label style="font-size:11px;font-weight:700;color:var(--muted);">Company / portal name</label><input id="portalCompanyName" placeholder="7J Finance" type="text"/></div><div><label style="font-size:11px;font-weight:700;color:var(--muted);">Microsoft Entra tenant ID</label><input id="portalTenantId" placeholder="Tenant GUID" type="text"/></div><div><label style="font-size:11px;font-weight:700;color:var(--muted);">SharePoint host</label><input id="portalSharePointHost" placeholder="company.sharepoint.com" type="text"/></div><div><label style="font-size:11px;font-weight:700;color:var(--muted);">SharePoint site path</label><input id="portalSitePath" placeholder="/sites/BDM" type="text"/></div><div><label style="font-size:11px;font-weight:700;color:var(--muted);">Microsoft Entra sign-in mode</label><select id="portalAuthMode"><option value="tenant">Current customer tenant</option><option value="multitenant">Multitenant (SaaS / leased)</option></select></div><div><label style="font-size:11px;font-weight:700;color:var(--muted);">Application (client) ID</label><input id="portalClientId" type="text" readonly style="background:#f4f6f4;"/></div></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;"><button class="btn" onclick="saveOrganisationSettings()" type="button">Save organisation settings</button><button class="btn secondary" onclick="resetOrganisationSettings()" type="button">Reset to app defaults</button></div><div class="status-msg" id="organisationSettingsStatus"></div><div class="setting-note" style="margin-top:10px;"><strong>SaaS/lease recommendation:</strong> use one multitenant Microsoft Entra application, use the same client ID for customers, and let each customer consent in their own tenant. Never put a client secret in this HTML.</div><details style="margin-top:12px;background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:12px;"><summary style="cursor:pointer;font-weight:700;font-size:12px;">📘 Leasing / customer onboarding instructions</summary><div style="font-size:12px;line-height:1.65;color:var(--muted);margin-top:10px;"><ol style="padding-left:20px;"><li>In Microsoft Entra admin centre open <strong>App registrations → New registration</strong>.</li><li>For a leased SaaS deployment choose <strong>Accounts in any organisational directory (Multitenant)</strong>. Microsoft identifies this option as the model for applications serving multiple organisations.</li><li>Add the exact portal URL as a <strong>Web redirect URI</strong>. Keep the same Application (client) ID for all customer tenants.</li><li>Add delegated Microsoft Graph permissions required by the portal, currently <code>User.Read</code>, <code>Sites.ReadWrite.All</code> and <code>Calendars.ReadWrite</code>. Use least privilege and obtain admin consent where required. Microsoft documents <code>Sites.ReadWrite.All</code> as allowing delegated editing/deletion of list items on behalf of the signed-in user.</li><li>For each customer, set the <strong>Company name</strong>, <strong>Tenant ID</strong>, <strong>SharePoint host</strong> and <strong>site path</strong>. For SaaS mode select <strong>Multitenant</strong>.</li><li>Create the portal's Microsoft Lists in the customer's SharePoint site and enter their exact display names under <strong>Admin → SharePoint List Sources</strong>. Click <strong>Test</strong>, then <strong>Save</strong>.</li><li>Create <strong>BDM Call Guide</strong> with: <code>Title</code>, <code>SectionKey</code>, <code>Content</code> (multiple lines), <code>SortOrder</code>, <code>Active</code>, <code>Updated</code>, <code>UpdatedBy</code>. Then use the Call Guide editor to publish/edit sections.</li><li>For the strongest outcome-state protection, add an optional Broker List column named <code>WorkflowStateUpdatedAt</code> (Date and Time). The portal uses it to prevent an old <code>NO_PRODUCT</code> audit entry from putting a broker back into Not Suitable after an explicit revert.</li><li><strong>Never put a client secret in this HTML.</strong> Keep AI secrets in the Azure Function/App settings and use delegated Microsoft sign-in for Microsoft 365 data.</li></ol><p style="margin-top:8px;"><strong>Important:</strong> changing tenant/site settings takes effect for the next Microsoft sign-in. The current signed-in session keeps its existing access token.</p></div></details></div><div id="dataHealthCard" style="background:#fff;border:1px solid var(--border);padding:16px;border-radius:var(--radius);margin-bottom:20px;">
+<div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
+<div><h3 style="font-size:15px;color:var(--primary-dark);margin-bottom:6px;">🩺 Data Health &amp; Live Sync</h3><p style="font-size:12px;color:var(--muted);margin:0;">SharePoint is the source of truth. The portal checks the broker source in the background and uses ETag concurrency protection when records are saved.</p></div>
+<button class="btn secondary" onclick="refreshDataHealthNow()" type="button">Refresh now</button>
+</div>
+<div id="dataHealthGrid" style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:12px;"></div>
+<div class="status-msg" id="dataHealthMessage" style="margin-top:10px;"></div>
+</div>
+<div style="background:#fff;border:1px solid var(--border);padding:16px;border-radius:var(--radius);margin-bottom:20px;">
+  <h3 style="font-size:15px;color:var(--primary-dark);margin-bottom:8px;">🚀 Launch hardening &amp; support</h3>
+  <p style="font-size:12px;color:var(--muted);margin:0 0 8px;">
+    Demo Mode is hidden from normal users. Desktop: on the Home screen press <strong>Ctrl+D</strong>.
+    Mobile: tap the Home icon <strong>5 times within 2 seconds</strong>. This is a hidden testing shortcut and does not replace Microsoft 365 security.
+  </p>
+  <p style="font-size:12px;color:var(--muted);margin:0;">
+    Before launch, test two real BDM accounts claiming the same broker, then test Open → My Brokers → Release → Open and
+    Open → Dialler → Not Suitable → Revert → Open. Use <strong>Refresh now</strong> here to verify live SharePoint data.
+  </p>
+</div>
+
+<!-- Data Backup & Excel Export (Admin Only) -->
+<div style="background:#fff; border:1px solid var(--border); padding:16px; border-radius:var(--radius); margin-bottom:20px;">
+<h3 style="font-size:15px; color:var(--primary-dark); margin-bottom:10px;">Data Backup, Export &amp; Restore</h3>
+<p style="font-size:12px; color:var(--muted); margin-bottom:16px;">Download system backups, export records to Excel, or restore data.</p>
+<div class="admin-card" style="margin-bottom:12px;">
+<div>
+<strong>Export to Excel (.xlsx)</strong><br/>
+<span style="font-size:12px;color:var(--muted);">Download all current broker records including expanded profiles and complete audit trails.</span>
+</div>
+<button class="btn" id="exportExcelBtn" type="button">Download Excel</button>
+</div>
+<div class="admin-card" style="margin-bottom:12px;">
+<div>
+<strong>Download Microsoft Lists Excel Template</strong><br/>
+<span style="font-size:12px;color:var(--muted);">Blank workbook with the correct sheet names and column headings for Brokers, Users, Account Changes, Dialler Activity and Deals.</span>
+</div>
+<button class="btn secondary" id="downloadListTemplateBtn" type="button">Download Template</button>
+</div>
+<div class="admin-card" style="margin-bottom:16px;">
+<div>
+<strong>Download Full JSON Backup</strong><br/>
+<span style="font-size:12px;color:var(--muted);">Save a complete system backup file to restore later if needed.</span>
+</div>
+<button class="btn secondary" id="exportJsonBtn" type="button">Download Backup</button><button class="btn secondary" type="button" onclick="recordBackupManifest().then(()=>{const e=document.getElementById('backupStatusMsg');if(e)e.textContent='Backup manifest recorded to Microsoft Lists.';}).catch(e=>{const x=document.getElementById('backupStatusMsg');if(x)x.textContent='Could not record backup manifest: '+(e.message||e);})">Record backup manifest</button>
+</div>
+<div class="admin-card" style="margin-bottom:12px;">
+<div>
+<strong>Restore from Excel Backup (.xlsx)</strong><br/>
+<span style="font-size:12px;color:var(--muted);">Upload a previously exported 7J Excel file to completely overwrite and restore records.</span>
+</div>
+<input accept=".xlsx,.xls" id="restoreExcelInput" style="font-size:13px;" type="file"/>
+</div>
+<div class="admin-card">
+<div>
+<strong>Restore from JSON Backup File</strong><br/>
+<span style="font-size:12px;color:var(--muted);">Upload a previously saved JSON backup file to restore records.</span>
+</div>
+<input accept=".json" id="restoreFileInput" style="font-size:13px;" type="file"/>
+</div>
+<div class="status-msg" id="backupStatusMsg" style="margin-top:10px;"></div>
+</div>
+<!-- Broker Admin Database Controls & Filter -->
+<h2>Broker Pipeline Overview</h2>
+<div class="status-msg" id="adminStats"></div>
+<div class="toolbar" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+<input id="adminSearchBox" placeholder="Search all brokers…" style="flex:1; min-width:200px;" type="search"/>
+<select id="adminFilterSelect" onchange="renderAdmin()" style="padding:9px 12px; border:1px solid var(--border); border-radius:var(--radius); font-size:14px; background:#fff;">
+<option value="all">All Brokers</option>
+<option value="assigned">Assigned Only (All Users)</option>
+<option value="unassigned">Unassigned Only</option>
+</select>
+<!-- Assigned Pipeline User Filter -->
+<select id="adminUserFilterSelect" onchange="renderAdmin()" style="padding:9px 12px; border:1px solid var(--border); border-radius:var(--radius); font-size:14px; background:#fff;">
+<option value="all">Filter Pipeline by User (All)</option>
+</select>
+</div>
+<div class="filter-bar">
+<select aria-label="Filter by status" id="adminFilterStatus" onchange="renderAdmin()"><option value="all">All Statuses</option></select>
+<select aria-label="Filter by loan type" id="adminFilterLoanType" onchange="renderAdmin()"><option value="all">All Loan Types</option></select>
+<select aria-label="Filter by network" id="adminFilterNetwork" onchange="renderAdmin()"><option value="all">All Networks</option></select>
+<select aria-label="Filter by volume" id="adminFilterVolume" onchange="renderAdmin()"><option value="all">All Volumes</option></select>
+<select aria-label="Filter by city" id="adminFilterCity" onchange="renderAdmin()"><option value="all">All Cities</option></select>
+<select aria-label="Sort" id="adminFilterSort" onchange="renderAdmin()">
+<option value="recent">Sort: Recently added</option>
+<option value="contactNew">Sort: Last contact (newest)</option>
+<option value="contactOld">Sort: Last contact (oldest)</option>
+<option value="name">Sort: Name A–Z</option>
+</select>
+<button class="btn-clear" onclick="clearAdminFilters()" type="button">Clear filters</button>
+<span class="filter-count" id="adminFilterCount"></span>
+<label class="admin-page-size" for="adminPageSize">Display
+<select id="adminPageSize" aria-label="Brokers per page" onchange="adminPipelinePage=1;renderAdmin()">
+<option value="10">10</option>
+<option value="20" selected>20</option>
+<option value="30">30</option>
+<option value="50">50</option>
+<option value="100">100</option>
+</select>
+</label>
+</div>
+<div id="adminList"></div>
+<div id="adminPagination" class="admin-pagination" aria-label="Broker pipeline pages"></div>
+</div>
+</div>
+<!-- Deals & Rankings view -->
+<div id="dealsView" style="display:none;">
+<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+<h2 style="margin:0;">Deals &amp; Rankings</h2>
+<div class="filter-bar" style="flex:1; max-width:560px; justify-content:flex-end;">
+<select aria-label="Filter by BDM" id="dealsFilterBDM" onchange="renderDeals()"><option value="all">All BDMs</option></select>
+<select aria-label="Filter by loan type" id="dealsFilterLoan" onchange="renderDeals()"><option value="all">All Loan Types</option></select>
+<select aria-label="Time period" id="dealsFilterPeriod" onchange="renderDeals()">
+<option value="all">All time</option><option value="week">This week</option><option value="month">This month</option><option value="year">This year</option>
+</select>
+<button class="btn-clear" onclick="clearDealsFilters()" type="button">Clear</button>
+<span class="filter-count" id="dealsFilterCount"></span>
+</div>
+</div>
+<div id="dealsSummary" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:18px;"></div>
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:18px;">
+<div>
+<h3 style="font-size:14px; color:var(--primary-dark); margin-bottom:8px;">Top Brokers by Deal Value</h3>
+<div id="brokerRanking"></div>
+</div>
+<div>
+<h3 style="font-size:14px; color:var(--primary-dark); margin-bottom:8px;">BDM Leaderboard</h3>
+<div id="bdmRanking"></div>
+</div>
+</div>
+<h3 style="font-size:14px; color:var(--primary-dark); margin-bottom:8px;">Recent Deals</h3>
+<div id="dealsTable"></div>
+</div>
+<!-- Unified KPI Dashboard -->
+<div id="kpiDashboardView" style="display:none;">
+<div class="kpi-dashboard-head">
+<div>
+<div class="kpi-eyebrow">PERFORMANCE CENTRE</div>
+<h2>KPI Dashboard</h2>
+<p>Business performance, deals, rankings, dialler activity and performance reviews in one place.</p>
+</div>
+<div class="kpi-dashboard-filters">
+<select id="dashboardPeriod" onchange="renderKPIDashboard()">
+<option value="all">All time</option><option value="week">This week</option><option value="month">This month</option><option value="year">This year</option>
+</select>
+<select id="dashboardUser" onchange="renderKPIDashboard()"><option value="all">All BDMs</option></select>
+<select id="dashboardYear" onchange="renderKPIDashboard()"></select>
+<div class="kpi-custom-date">
+<span style="font-size:12px;font-weight:600;color:var(--muted);">Custom</span>
+<input aria-label="KPI start date" id="dashboardStartDate" onchange="renderKPIDashboard()" type="date"/>
+<span style="color:var(--muted);">to</span>
+<input aria-label="KPI end date" id="dashboardEndDate" onchange="renderKPIDashboard()" type="date"/>
+</div>
+<button class="btn-clear" onclick="clearKPIDashboardFilters()" type="button">Clear</button>
+</div>
+</div>
+<div class="kpi-section-tabs" role="tablist">
+<button class="kpi-section-tab active" data-kpi-tab="overview" onclick="setKPIDashboardTab('overview')">Overview KPIs</button>
+<button class="kpi-section-tab" data-kpi-tab="deals" onclick="setKPIDashboardTab('deals')">Deals</button>
+<button class="kpi-section-tab" data-kpi-tab="rankings" onclick="setKPIDashboardTab('rankings')">Rankings</button><button class="kpi-section-tab" data-kpi-tab="reviews" onclick="setKPIDashboardTab('reviews')">Performance Reviews</button><button class="kpi-section-tab" data-kpi-tab="dialler" onclick="setKPIDashboardTab('dialler')">Dialler KPIs</button>
+</div>
+<div class="modern-kpi-grid" id="dashboardSummary"></div>
+<div class="modern-kpi-card" id="dashboardDealsPanel" style="display:none;margin-bottom:16px;"><div class="modern-kpi-card-head"><div><h3>Deals</h3><span>Filtered by the same KPI controls above</span></div><span id="dashboardDealsUpdated" style="font-size:11px;color:var(--muted);"></span></div><div id="dashboardDealsTable"></div></div>
+<div class="modern-kpi-card" id="dashboardReviewsPanel" style="display:none;margin-bottom:16px;">
+<div class="modern-kpi-card-head"><div><h3>Performance Reviews</h3><span>Individual targets, management notes and BDM responses with a full audit trail.</span></div><span id="performanceReviewStatus" style="font-size:11px;color:var(--muted);"></span></div>
+<div id="performanceReviewAdminTools" style="display:none;margin-bottom:16px;padding:14px;background:#f7faf8;border:1px solid var(--border);border-radius:14px;">
+<div class="form-row"><div><label>BDM</label><select id="reviewBDMSelect"></select></div><div><label>Review date</label><input id="reviewDate" type="date"></div></div>
+<div class="form-row"><div><label>Target / objective</label><input id="reviewTarget" placeholder="e.g. 20 qualified calls per day"></div><div><label>Review period</label><select id="reviewPeriod"><option value="weekly">Weekly</option><option value="monthly" selected>Monthly</option><option value="quarterly">Quarterly</option><option value="ad_hoc">Ad hoc</option></select></div></div>
+<label>Admin notes</label><textarea id="reviewAdminNote" rows="4" placeholder="Performance feedback, agreed actions, coaching notes..."></textarea>
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;"><button class="btn" type="button" onclick="savePerformanceReview()">Save review</button><button class="btn secondary" type="button" onclick="clearPerformanceReviewForm()">Clear</button></div>
+<div id="reviewAdminStatus" class="status-msg" style="margin-top:8px;"></div>
+</div>
+<div id="performanceReviewList"></div>
+</div>
+<div id="dashboardDiallerPanel" class="kpi-dialler-panel" style="display:none;margin-bottom:16px;"><div class="kpi-dashboard-head"><div><div class="kpi-eyebrow">CALL PERFORMANCE CENTRE</div><h2>Dialler KPIs</h2><p>Call outcomes, conversion activity, weekly performance and broker ranking.</p></div><div class="kpi-filter-note">Uses the same period, BDM and custom-date filters above.</div></div><div class="modern-kpi-grid" id="dialerKpiSummary"></div><div class="kpi-dashboard-grid"><section class="modern-kpi-card kpi-wide"><div class="modern-kpi-card-head"><div><h3>Call outcomes</h3><span>Structured Power Dialler dispositions.</span></div></div><div id="dialerOutcomeTable"></div></section><section class="modern-kpi-card"><div class="modern-kpi-card-head"><div><h3>Weekly activity</h3><span>Calls, appointments, deals and not suitable outcomes.</span></div></div><div id="dialerWeeklyTable"></div></section><section class="modern-kpi-card kpi-wide"><div class="modern-kpi-card-head"><div><h3>Broker ranking</h3><span>Performance score based on dialler outcomes.</span></div></div><div id="dialerRankingSummary" class="modern-kpi-grid" style="margin-bottom:12px;"></div><div id="dialerBrokerRanking"></div></section></div></div>
+<div class="kpi-dashboard-grid">
+<section class="modern-kpi-card kpi-wide">
+<div class="modern-kpi-card-head"><div><h3>Monthly performance</h3><span>Deal value, deals, appointments and calls</span></div></div>
+<div class="monthly-chart" id="dashboardMonthlyChart"></div>
+</section>
+<section class="modern-kpi-card">
+<div class="modern-kpi-card-head"><div><h3>Top brokers by deal value</h3><span>Highest-value brokers for the selected period</span></div></div>
+<div id="dashboardBrokerRanking"></div>
+</section>
+<section class="modern-kpi-card">
+<div class="modern-kpi-card-head"><div><h3>BDM deal leaderboard</h3><span>Deal count and value for the selected period</span></div></div>
+<div id="dashboardBdmRanking"></div>
+</section>
+</div>
+</div>
+
+<div class="call-queue-shell" id="dialerView" style="display:none;">
+<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+<h2 style="margin:0;">📞 Power Dialer</h2>
+<div class="filter-bar" style="flex:1; max-width:620px; justify-content:flex-end;">
+<select aria-label="Queue scope" id="dialerFilterScope" onchange="buildDialerQueue()">
+<option value="open">All open brokers</option>
+<option value="mine">My assigned brokers</option>
+<option value="notcontacted">Not contacted recently</option>
+</select>
+<select aria-label="Filter by loan type" id="dialerFilterLoan" onchange="buildDialerQueue()"><option value="all">All Loan Types</option></select>
+<button class="btn-clear" onclick="buildDialerQueue()" type="button">Refresh queue</button>
+<button class="btn secondary" onclick="openCallbackList()" type="button">📅 Callbacks <span id="callbackCountBadge" class="callback-count-badge">0</span></button>
+<span class="filter-count" id="dialerProgress"></span>
+</div>
+</div>
+<div id="dialerCard" style="background:#fff; border:1px solid var(--border); border-radius:var(--radius); padding:20px; max-width:760px;"></div>
+</div>
+</div>
+
+<!-- ==========================================
+     VIEW: CALENDAR
+     ========================================== -->
+<div class="app-view" id="calendarView" style="flex-direction:column;">
+<div class="calendar-shell">
+<div class="calendar-toolbar">
+<div class="calendar-title-wrap">
+<button class="calendar-nav-btn" onclick="calendarToday()" type="button">Today</button>
+<button aria-label="Previous month" class="calendar-nav-icon" onclick="calendarMove(-1)" type="button">‹</button>
+<button aria-label="Next month" class="calendar-nav-icon" onclick="calendarMove(1)" type="button">›</button>
+<h2 id="calendarTitle">Calendar</h2>
+<div aria-label="Calendar view" class="calendar-view-toggle">
+<button class="active" id="calViewMonth" onclick="setCalendarView('month')" type="button">Month</button>
+<button id="calViewWeek" onclick="setCalendarView('week')" type="button">Week</button>
+<button id="calViewDay" onclick="setCalendarView('day')" type="button">Day</button>
+</div>
+</div>
+<div class="calendar-actions">
+<button class="btn secondary" onclick="refreshCalendar()" type="button">↻ Refresh</button>
+<button class="btn" onclick="openCalendarEventModal()" type="button">+ New event</button>
+<span class="calendar-sync-status" id="calendarSyncStatus">Demo calendar</span>
+</div>
+</div>
+<div class="calendar-layout">
+<aside class="calendar-sidebar">
+<h3>My calendar</h3>
+<div class="calendar-account" id="calendarAccount">Demo user</div>
+<div class="calendar-help">Events created while signed into Microsoft 365 are created in your Microsoft calendar with a Teams online meeting, so they appear in Teams Calendar too.</div>
+<h3 style="margin-top:18px;">Find a broker</h3>
+<input id="calendarBrokerSearch" oninput="renderCalendarBrokerSearch()" placeholder="Search existing brokers…" type="search"/>
+<div id="calendarBrokerResults"></div>
+</aside>
+<section class="calendar-main">
+<div class="calendar-weekdays"><div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div></div>
+<div class="calendar-grid" id="calendarGrid"></div>
+</section>
+</div>
+</div>
+</div>
+<!-- ==========================================
+     VIEW 2: CALL GUIDE & SCRIPTS
+     ========================================== -->
+<div class="app-view" id="guideView">
+<div class="guide-container">
+<sidebar>
+<h2>7J Call Guide</h2>
+<ul id="guideSidebarList"><li>Sections load from the shared Call Guide.</li></ul>
+</sidebar>
+<div class="guide-main">
+<header-sec>
+<h2>7J Finance - BDM Quick Reference</h2>
+<p>Your comprehensive, stutter-free guide for cold calling intermediaries to uncover bridging and secured loan enquiries.</p>
+</header-sec>
+<!-- Dynamic Call Script Widget Feature -->
+<section class="guide-section" id="pitchwidget" style="background: var(--primary-light); border-color: var(--primary);">
+<h3>⚡ Live Personalized Pitch Generator</h3>
+<p>Type the intermediary's details below to instantly generate a custom pitch script tailored on the fly:</p>
+<div class="form-row" style="margin-top:14px;">
+<div>
+<label style="color:var(--primary-dark);">Intermediary Name</label>
+<input id="pitchBrokerName" oninput="generateCustomPitch()" placeholder="e.g. Sarah" style="background:#fff;" type="text"/>
+</div>
+<div>
+<label style="color:var(--primary-dark);">Brokerage Company</label>
+<input id="pitchCompanyName" oninput="generateCustomPitch()" placeholder="e.g. Meridian Finance" style="background:#fff;" type="text"/>
+</div>
+</div>
+<div class="script-box" id="customPitchOutput" style="background:#fff; margin-top:12px;">
+                    "Hi Sarah, it's Tim calling from 7J Finance over at Meridian Finance. I know I'm catching you completely out of the blue—did I happen to catch you at an okay time for a quick chat?"
+                </div>
+</section><div id="guideDynamicRoot"></div>
+</div>
+</div>
+</div>
+<!-- DISPLAY SETTINGS -->
+<div aria-label="Display settings" class="display-settings-popover" id="displaySettingsPopover" role="dialog">
+<div class="display-settings-head"><strong>Display settings</strong><button class="settings-close" onclick="toggleDisplaySettings(event)" type="button">✕</button></div>
+<label>Theme<select id="displayTheme" onchange="applyDisplaySettings()"><option value="light">Light</option><option value="dark">Dark</option></select></label>
+<label>Font size<select id="displayFontSize" onchange="applyDisplaySettings()"><option value="small">Small</option><option selected="" value="medium">Medium</option><option value="large">Large</option><option value="xlarge">Extra large</option></select></label>
+<label>Font style<select id="displayFontStyle" onchange="applyDisplaySettings()"><option selected="" value="system">System</option><option value="inter">Inter / modern</option><option value="serif">Serif</option><option value="mono">Monospace</option></select></label>
+<button class="btn secondary" onclick="resetDisplaySettings()" type="button">Reset display</button>
+</div>
+<!-- ==========================================
+     DETAIL PANEL OVERLAY (WITH ALL EXPANDED FIELDS & POP-UP WIDGETS)
+     ========================================== -->
+<div class="panel-overlay" id="detailOverlay">
+<div class="panel">
+<button aria-label="Close broker window" class="close-x" id="closeDetail" onclick="closeDetailPanel(event)" title="Close" type="button">✕</button>
+<div class="panel-content">
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+<h2 id="detailTitle" style="margin: 0;">Broker</h2>
+<div style="display:flex;gap:6px;align-items:center;">
+<button aria-label="Full screen" class="broker-thumb-btn" id="detailFullscreenBtn" onclick="toggleBrokerFullscreen(event)" title="Full screen" type="button">⛶</button>
+<button aria-label="Audit trail" class="broker-thumb-btn" id="auditButton" onclick="openBrokerAuditModal(event)" title="Audit trail" type="button">◷</button>
+<button aria-label="Open Microsoft record" class="broker-thumb-btn" id="openMicrosoftRecordBtn" onclick="openMicrosoftBrokerRecord(event)" title="Open Microsoft record" type="button">▦</button>
+<button aria-label="Notes" class="broker-thumb-btn" id="notesTopBtn" onclick="openNotesPopup(event)" title="Notes" type="button">📝</button>
+</div>
+</div>
+<div class="form-row">
+<div>
+<label>Contact's Name</label>
+<input id="f_name"/>
+</div>
+<div>
+<label>Company Name</label>
+<input id="f_company"/>
+</div>
+</div>
+<div class="form-row">
+<div>
+<label>Contact Number</label>
+<div class="input-group">
+<input id="f_phone"/>
+<a class="icon-action-btn" href="#" id="nuacomCallBtn" title="Call via Nuacom">📞 Call</a>
+</div>
+</div>
+<div>
+<label>Email</label>
+<div class="input-group">
+<input id="f_email"/>
+<a class="icon-action-btn" href="#" id="outlookEmailBtn" title="Open Outlook">✉️ Email</a>
+</div>
+</div>
+</div>
+<div class="form-row">
+<div>
+<label>Website</label>
+<div class="input-group">
+<input id="f_website"/>
+<a class="icon-action-btn" href="#" id="websiteLinkBtn" rel="noopener noreferrer" target="_blank" title="Visit Website">🌐 Visit</a>
+</div>
+</div>
+<div>
+<label>Preferred Communication</label>
+<select id="f_prefComm">
+<option value="Phone">Phone</option>
+<option value="Email">Email</option>
+<option value="WhatsApp">WhatsApp</option>
+<option value="Mobile">Mobile</option>
+</select>
+</div>
+</div>
+<div class="form-row">
+<div>
+<label>Loan Types Handled (Multi-Select)</label>
+<div id="f_loanTypesContainer" style="border: 1px solid var(--border); border-radius: var(--radius); padding: 8px; max-height: 120px; overflow-y: auto; background: #fff;">
+<label style="font-weight:normal; font-size:13px; display:block; margin:4px 0;"><input style="width:auto; margin-right:6px;" type="checkbox" value="Residential Bridging"/> Residential Bridging</label>
+<label style="font-weight:normal; font-size:13px; display:block; margin:4px 0;"><input style="width:auto; margin-right:6px;" type="checkbox" value="Commercial Bridging"/> Commercial Bridging</label>
+<label style="font-weight:normal; font-size:13px; display:block; margin:4px 0;"><input style="width:auto; margin-right:6px;" type="checkbox" value="Development Finance"/> Development Finance</label>
+<label style="font-weight:normal; font-size:13px; display:block; margin:4px 0;"><input style="width:auto; margin-right:6px;" type="checkbox" value="Buy-to-Let Mortgages"/> Buy-to-Let Mortgages</label>
+<label style="font-weight:normal; font-size:13px; display:block; margin:4px 0;"><input style="width:auto; margin-right:6px;" type="checkbox" value="Second Charge / Secured Loans"/> Second Charge / Secured Loans</label>
+<label style="font-weight:normal; font-size:13px; display:block; margin:4px 0;"><input style="width:auto; margin-right:6px;" type="checkbox" value="HMO / Multi-Unit Blocks"/> HMO / Multi-Unit Blocks</label>
+<label style="font-weight:normal; font-size:13px; display:block; margin:4px 0;"><input style="width:auto; margin-right:6px;" type="checkbox" value="Expat / Foreign National Mortgages"/> Expat / Foreign National Mortgages</label>
+<label style="font-weight:normal; font-size:13px; display:block; margin:4px 0;"><input style="width:auto; margin-right:6px;" type="checkbox" value="Auction Finance"/> Auction Finance</label>
+<label style="font-weight:normal; font-size:13px; display:block; margin:4px 0;"><input style="width:auto; margin-right:6px;" type="checkbox" value="Complex Refurbishment"/> Complex Refurbishment</label>
+</div>
+</div>
+<div>
+<label>Estimated Monthly Volume</label>
+<select id="f_volume">
+<option value="Under £1M">Under £1M</option>
+<option value="£1M–£5M">£1M–£5M</option>
+<option value="£5M+">£5M+</option>
+</select>
+</div>
+</div>
+<div class="form-row">
+<div>
+<label>Network / Club Affiliation</label>
+<input id="f_network" placeholder="e.g. PMS, TMA, DA"/>
+</div>
+<div>
+<label>BDM Relationship Status</label>
+<select id="f_status">
+<option value="Cold">Cold</option>
+<option value="Warm">Warm</option>
+<option value="Active Introducer">Active Introducer</option>
+<option value="Tier 1 VIP">Tier 1 VIP</option>
+<option value="Dormant">Dormant</option>
+</select>
+</div>
+</div>
+<div class="form-row">
+<div>
+<label>City</label>
+<input id="f_city"/>
+</div>
+<div>
+<label>Next Follow-Up Date</label>
+<input id="f_nextFollowUp" type="date"/>
+</div>
+</div>
+<label>Address</label>
+<textarea id="f_address" rows="2"></textarea>
+<!-- Notes Pop-Up Widget Trigger & Read-Only Hard Save Container -->
+<div style="margin-top:14px; background:#f8fafc; border:1px solid var(--border); padding:12px; border-radius:var(--radius);">
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+<label style="margin:0; font-weight:600; color:var(--primary-dark);">Notes &amp; Activity Log</label>
+<button class="btn secondary" onclick="openNotesPopup()" style="padding:4px 10px; font-size:12px;" type="button">Open Notes Widget 📝</button>
+</div>
+<div id="notesReadOnlyPreview" style="font-size:13px; color:var(--muted); max-height:80px; overflow-y:auto; background:#fff; padding:8px; border:1px solid var(--border); border-radius:4px;">
+                    No notes recorded yet.
+                </div>
+</div>
+<label style="display:flex;align-items:center;gap:8px;font-weight:400;margin-top:14px;">
+<input checked="" id="f_logContact" style="width:auto;" type="checkbox"/>
+                Mark as contacted today when I save
+            </label>
+<div id="assignInfo" style="margin-top:14px;font-size:13px;color:var(--muted);"></div>
+</div>
+<div class="panel-actions">
+<button class="btn secondary" id="saveDetailBtn" type="button">Save changes</button>
+<button class="btn" id="assignBtn" type="button">Assign to me</button>
+<button class="btn secondary" id="logDealBtn" onclick="openLogDealModal()" style="background:#eefaf2; color:#1a6b3a; border-color:#bfe6cd;" type="button">Log Deal £</button>
+<button class="btn secondary" id="moveToNotSuitableBtn" onclick="moveCurrentToNotSuitable()" style="background:#fdf2f2; color:var(--red); border-color:#f9d8d8;" type="button">Move to Not Suitable</button>
+<button class="btn secondary" id="revertToOpenBtn" onclick="revertCurrentToOpen()" style="display:none;" type="button">Revert to Open Broker</button>
+<button class="btn danger" id="releaseBtn" style="display:none;" type="button">Release to pool</button>
+</div>
+</div>
+</div>
+<!-- ==========================================
+     POP-UP MODAL: NOTES POP-UP WIDGET
+     ========================================== -->
+<div class="panel-overlay" id="notesPopupModal">
+<div class="panel" style="max-width:500px;">
+<button class="close-x" onclick="event.stopPropagation();closeNotesPopup()" type="button">✕</button>
+<h2>Broker Notes &amp; History</h2>
+<p style="font-size:12px; color:var(--muted); margin-bottom:10px;">Previous notes are securely saved in read-only format. Add new notes below to append them permanently to the audit record.</p>
+<div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-bottom:8px;"><div style="flex:1;min-width:180px;"><label>Filter note history</label><select id="notesHistoryFilter" onchange="renderNotesHistory()" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:var(--radius);"><option value="all">All categories</option><option>General</option><option>Call</option><option>Deal</option><option>Compliance</option><option>Follow-up</option><option>Client/Broker Information</option><option>Internal</option></select></div></div>
+<label>Historical / Read-Only Notes</label>
+<div id="notesHistoryDisplay" style="background:#f8fafc; border:1px solid var(--border); padding:10px; border-radius:var(--radius); max-height:150px; overflow-y:auto; font-size:13px; margin-bottom:12px; white-space:pre-wrap;"></div>
+<label>Note category</label>
+<select id="newNoteCategory" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:10px;">
+<option>General</option><option>Call</option><option>Deal</option><option>Compliance</option><option>Follow-up</option><option>Client/Broker Information</option><option>Internal</option>
+</select>
+<label>Add New Note / Update</label>
+<textarea id="newNoteInput" placeholder="Type your new note here..." rows="4"></textarea>
+<div class="panel-actions">
+<button class="btn" onclick="appendNewNote()" type="button">Hard Save Note</button>
+<button class="btn secondary" onclick="closeNotesPopup()" type="button">Close</button>
+</div>
+</div>
+</div>
+<!-- ==========================================
+     POP-UP MODAL: INDIVIDUAL BROKER AUDIT TRAIL
+     ========================================== -->
+<div class="panel-overlay" id="brokerAuditModal">
+<div class="panel" style="max-width:650px;">
+<button class="close-x" onclick="event.stopPropagation();closeBrokerAuditModal()" type="button">✕</button>
+<h2 id="brokerAuditTitle">Audit Trail for Broker</h2>
+<p style="font-size:12px; color:var(--muted); margin-bottom:10px;">Complete history of every update, status change, and modification made to this broker record.</p>
+<div id="brokerAuditContent" style="max-height:350px; overflow-y:auto;"></div>
+<div class="panel-actions" style="margin-top:15px;">
+<button class="btn secondary" onclick="closeBrokerAuditModal()" type="button">Close</button>
+</div>
+</div>
+</div>
+<!-- SheetJS for file parsing & excel export -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- ==========================================================
+     MICROSOFT 365 / ENTRA ID LOGIN + SHAREPOINT LISTS (Graph API)
+     ========================================================== -->
+<!-- MSAL.js: handles the Microsoft 365 (work/school) sign-in. Loaded LOCALLY (same folder) so SharePoint's content-security policy can't block it. -->
+<!-- MSAL.js inlined directly into the page (no separate file, so SharePoint cannot block it) -->
+
+
+
+<!-- Calendar event modal -->
+<div class="panel-overlay" id="calendarEventModal">
+<div class="panel" style="max-width:520px;">
+<button class="close-x" onclick="event.stopPropagation();closeCalendarEventModal()" type="button">✕</button>
+<h2 id="calendarEventModalTitle">New calendar event</h2>
+<p id="calendarEventBrokerLabel" style="font-size:12px;color:var(--muted);margin-bottom:10px;"></p>
+<label>Subject</label><input id="calSubject" placeholder="Broker call / follow-up" type="text"/>
+<div class="form-row"><div><label>Date</label><input id="calDate" type="date"/></div><div><label>Time</label><input id="calTime" type="time"/></div></div>
+<div class="form-row"><div><label>Duration</label><select id="calDuration"><option value="30">30 minutes</option><option selected="" value="60">1 hour</option><option value="90">90 minutes</option><option value="120">2 hours</option></select></div><div><label>Broker</label><select id="calBrokerSelect"></select></div></div>
+<label>Notes</label><textarea id="calNotes" placeholder="Notes / agenda" rows="3"></textarea>
+<label style="display:flex;gap:8px;align-items:center;margin-top:10px;"><input checked="" id="calTeams" style="width:auto;" type="checkbox"/> Create Teams online meeting</label>
+<div class="panel-actions"><button class="btn secondary" onclick="closeCalendarEventModal()" type="button">Cancel</button><button class="btn" onclick="saveCalendarEvent()" type="button">Save event</button></div>
+</div>
+</div>
+<!-- Log Deal modal -->
+<div class="panel-overlay" id="logDealModal">
+<div class="panel" style="max-width:460px;">
+<button class="close-x" onclick="event.stopPropagation();closeLogDealModal()" type="button">✕</button>
+<h2>Log a Deal</h2>
+<p id="logDealBroker" style="font-size:12px; color:var(--muted); margin-bottom:12px;"></p>
+<div class="form-row">
+<div>
+<label>Deal Value (£)</label>
+<input id="dealValue" min="0" placeholder="e.g. 250000" step="0.01" style="width:100%; padding:8px; font-size:14px; border:1px solid var(--border); border-radius:var(--radius);" type="number"/>
+</div>
+<div>
+<label>Date</label>
+<input id="dealDate" style="width:100%; padding:8px; font-size:14px; border:1px solid var(--border); border-radius:var(--radius);" type="date"/>
+</div>
+</div>
+<div style="margin-bottom:10px;">
+<label>Loan Type</label>
+<select id="dealLoanType" style="width:100%; padding:8px; font-size:14px; border:1px solid var(--border); border-radius:var(--radius);"></select>
+</div>
+<div style="margin-bottom:12px;">
+<label>Notes</label>
+<textarea id="dealNotes" placeholder="Optional notes about this deal" rows="2" style="width:100%; padding:8px; font-size:14px; border:1px solid var(--border); border-radius:var(--radius); resize:vertical;"></textarea>
+</div>
+<div style="display:flex; justify-content:flex-end; gap:8px;">
+<button class="btn secondary" onclick="closeLogDealModal()" type="button">Cancel</button>
+<button class="btn" onclick="saveDeal()" type="button">Save Deal</button>
+</div>
+</div>
+</div>
+<!-- Reassign broker modal (replaces unreliable browser prompt) -->
+<div id="reassignModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
+<div style="background:#fff; border-radius:12px; padding:20px; width:90%; max-width:420px; box-shadow:0 12px 40px rgba(0,0,0,0.25);">
+<h3 style="font-size:15px; color:var(--primary-dark); margin-bottom:4px;">Reassign broker</h3>
+<p id="reassignBrokerName" style="font-size:12px; color:var(--muted); margin-bottom:12px;"></p>
+<label style="font-size:11px; font-weight:600; color:var(--muted);">Assign to</label>
+<select id="reassignUserSelect" style="width:100%; padding:8px; font-size:13px; border:1px solid var(--border); border-radius:var(--radius); margin-bottom:12px;">
+<option value="">Loading team…</option>
+</select>
+<p id="reassignEmptyNote" style="display:none; font-size:12px; color:var(--muted); margin-bottom:12px;">No team members have signed in yet. Ask someone to sign in once so they appear in the roster, then reassign.</p>
+<div style="display:flex; justify-content:flex-end; gap:8px;">
+<button class="btn secondary" onclick="closeReassignModal()" style="padding:8px 16px; font-size:13px;" type="button">Cancel</button>
+<button class="btn" id="reassignConfirmBtn" onclick="confirmReassign()" style="padding:8px 16px; font-size:13px;" type="button">Assign</button>
+</div>
+</div>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div id="demoModeButton" style="display:none !important;">
+  <button type="button" onclick="enterLocalDemoMode()" aria-label="Enter Demo Mode"
+    style="padding:12px 20px;border-radius:12px;border:1px solid rgba(21,74,40,.25);background:#fff;color:#154a28;font-weight:800;box-shadow:0 6px 18px rgba(0,0,0,.16);cursor:pointer;">
+    🧪 Demo Mode
+  </button>
+</div>
+
+
+
+
+
+
+
+
+
+<div class="panel-overlay callback-list-modal" id="callbackListModal">
+  <div class="panel" style="max-width:680px;">
+    <div class="modal-head">
+      <h2>📅 Scheduled callbacks</h2>
+      <button class="close-x" type="button" onclick="closeCallbackList()" aria-label="Close callbacks">×</button>
+    </div>
+    <div id="callbackListContent"></div>
+  </div>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  <script>
+  // Load MSAL synchronously only for hosted production deployments. This is
+  // deliberately parser-blocking so 03-module.js/checkSession() cannot run before
+  // the MSAL library has finished loading. Local file:// and localhost sessions
+  // skip the large bundle entirely.
+  (function(){
+    const p=String(location.protocol||'').toLowerCase();
+    const h=String(location.hostname||'').toLowerCase();
+    const local=p==='file:' || h==='localhost' || h==='127.0.0.1' || h==='::1';
+    if(!local){
+      document.write('<script src="js/02-module.js"><\/script>');
+    }
+  })();
+</script>
+  <script src="js/03-module.js"></script>
+  <script src="js/04-module.js"></script>
+  <script src="js/05-module.js"></script>
+  <script src="js/06-module.js"></script>
+  <script src="js/07-module.js"></script>
+  <script src="js/08-module.js"></script>
+  <script src="js/09-module.js"></script>
+  <script src="js/10-module.js"></script>
+  <script src="js/11-module.js"></script>
+  <script src="js/12-module.js"></script>
+  <script src="js/13-module.js"></script>
+  <script src="js/14-module.js"></script>
+  <script src="js/15-module.js"></script>
+  <script src="js/16-module.js"></script>
+  <script src="js/17-module.js"></script>
+  <script src="js/18-module.js"></script>
+  <script src="js/19-module.js"></script>
+  <script src="js/20-module.js"></script>
+  <script src="js/21-module.js"></script>
+  <script src="js/22-module.js"></script>
+</body>
+</html>
