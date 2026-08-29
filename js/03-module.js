@@ -8,7 +8,7 @@ const M365_CONFIG = {
     // Production redirect URI is selected below from the current hosted origin.
     // For Netlify this becomes https://tims7jbdmportal.netlify.app/app.html.
     // For the existing SharePoint deployment it remains the SharePoint page.
-    redirectUri:   "https://7jfinance.sharepoint.com/sites/BDM/SiteAssets/bdm-portal.html",
+    redirectUri:   "https://timdell1990-lgtm.github.io/7j-finance-bdm-portal/",
     // Your SharePoint site details (used to locate the site in Graph)
     sharePointHost:"7jfinance.sharepoint.com",
     sitePath:      "/sites/BDM",
