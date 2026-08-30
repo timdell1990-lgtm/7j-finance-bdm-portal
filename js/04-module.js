@@ -764,10 +764,28 @@ async function testListSources(){
                   kpiSnapshots: document.getElementById("listNameKpiSnapshots").value.trim() || M365_CONFIG.lists.kpiSnapshots,
                   backupManifest: document.getElementById("listNameBackupManifest").value.trim() || M365_CONFIG.lists.backupManifest};
     const el = document.getElementById("listSourceStatus");
-    if(el){ el.style.display="block"; el.style.background="#fff4e5"; el.style.color="#8a5a00"; el.textContent = "Testing lists…"; }
-    const keys = Object.keys(vals); const results = await Promise.all(keys.map(k=>testListConnection(vals[k])));
-    const lines = keys.map((k,i)=> vals[k] + ": " + (results[i].ok ? "found ✓" : "not found ✗"));
-    if(el){ el.textContent = lines.join(" · "); }
+    if(el){ el.style.display="block"; el.style.background="#fff4e5"; el.style.color="#8a5a00"; el.textContent = "Testing lists and columns…"; }
+    const keys = Object.keys(vals);
+    const results = await Promise.all(keys.map(k=>testListConnectionWithColumns(vals[k], k)));
+    let allGood = true;
+    const lines = keys.map((k,i)=>{
+        const r = results[i]; const label = vals[k];
+        if(!r.ok){ allGood = false; return "❌ " + label + ": not found"; }
+        if(r.columnCheckError) return "✅ " + label + ": found (could not check columns — " + r.columnCheckError + ")";
+        const missingReq = r.missingRequired || [];
+        const missingOpt = r.missingOptional || [];
+        if(!missingReq.length && !missingOpt.length) return "✅ " + label + ": found — all columns present";
+        if(missingReq.length) allGood = false;
+        let msg = (missingReq.length ? "⚠️ " : "✅ ") + label + ": found";
+        if(missingReq.length) msg += " — missing columns: " + missingReq.join(", ");
+        if(missingOpt.length) msg += " — missing optional: " + missingOpt.join(", ");
+        return msg;
+    });
+    if(el){
+        el.innerHTML = lines.map(l => escapeHtml(l)).join("<br/>");
+        el.style.background = allGood ? "#e8f5e9" : "#fff4e5";
+        el.style.color = allGood ? "#1b5e20" : "#8a5a00";
+    }
 }
 async function saveListSources(){
     const fields = {brokers:'listNameBrokers', users:'listNameUsers', auditAccount:'listNameAuditAccount', auditDialer:'listNameAuditDialer', deals:'listNameDeals', globalSettings:'listNameGlobalSettings', callGuide:'listNameCallGuide', performanceReviews:'listNamePerformanceReviews', kpiSnapshots:'listNameKpiSnapshots', backupManifest:'listNameBackupManifest'};
