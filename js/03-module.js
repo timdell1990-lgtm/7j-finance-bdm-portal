@@ -57,6 +57,8 @@ function getProductionRedirectUri(){
     const host = String(location.hostname || '').toLowerCase();
     if(host === 'tims7jbdmportal.netlify.app') return 'https://tims7jbdmportal.netlify.app/app.html';
     if(host === 'timdell1990-lgtm.github.io') return 'https://timdell1990-lgtm.github.io/7j-finance-bdm-portal/app.html';
+    // Custom domain (portal.7jfinance.com) once DNS/GitHub Pages custom domain is live.
+    if(host === 'portal.7jfinance.com') return 'https://portal.7jfinance.com/app.html';
     return M365_CONFIG.redirectUri;
 }
 
