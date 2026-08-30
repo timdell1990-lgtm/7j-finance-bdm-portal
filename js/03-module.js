@@ -55,10 +55,8 @@ function isLocalRuntime(){
 
 function getProductionRedirectUri(){
     const host = String(location.hostname || '').toLowerCase();
-    // Netlify production portal. The app is served from /app.html after index.html
-    // forwards the browser here, so this exact path must be registered in Entra ID.
     if(host === 'tims7jbdmportal.netlify.app') return 'https://tims7jbdmportal.netlify.app/app.html';
-    // Existing SharePoint production deployment.
+    if(host === 'timdell1990-lgtm.github.io') return 'https://timdell1990-lgtm.github.io/7j-finance-bdm-portal/app.html';
     return M365_CONFIG.redirectUri;
 }
 
