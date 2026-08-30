@@ -58,9 +58,6 @@ function getProductionRedirectUri(){
     // Netlify production portal. The app is served from /app.html after index.html
     // forwards the browser here, so this exact path must be registered in Entra ID.
     if(host === 'tims7jbdmportal.netlify.app') return 'https://tims7jbdmportal.netlify.app/app.html';
-    // GitHub Pages production deployment. This exact URL (including the repo path)
-    // must also be registered as a redirect URI in Entra ID.
-    if(host === 'timdell1990-lgtm.github.io') return 'https://timdell1990-lgtm.github.io/7j-finance-bdm-portal/';
     // Existing SharePoint production deployment.
     return M365_CONFIG.redirectUri;
 }
