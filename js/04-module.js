@@ -260,9 +260,9 @@ function queueBrokerCloudSync(items){
     return _brokerSyncQueue;
 }
 
-function saveStoredBrokers(items) {
+function saveStoredBrokers(items, sync=true) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-    queueBrokerCloudSync(items);
+    if(sync) queueBrokerCloudSync(items);
 }
 
 // Snapshot used to detect which broker records changed since last sync
@@ -275,7 +275,15 @@ async function cloudSyncBrokers(items){
     try{
         const snap=_snapshotBrokers(items), prev=_brokerSnapshot;
         for(const id in prev){ if(!(id in snap)) await cloudDeleteBroker(JSON.parse(prev[id])); }
-        for(const id in snap){ if(!(id in prev) || prev[id]!==snap[id]) await cloudPushBroker(JSON.parse(snap[id])); }
+        for(const id in snap){
+            if(!(id in prev) || prev[id]!==snap[id]){
+                await cloudPushBroker(JSON.parse(snap[id]));
+                // Record each successful item immediately. If a later item fails,
+                // a subsequent sync will PATCH the successful items rather than
+                // POSTing them again. This makes partial imports idempotent.
+                _brokerSnapshot[id]=snap[id];
+            }
+        }
         _brokerSnapshot=snap;
     } finally { _brokerSyncInFlight=false; }
 }
@@ -872,25 +880,66 @@ function closeReassignModal(){
     if(modal) modal.style.display = "none";
     _reassignTargetId = null;
 }
-function confirmReassign(){
+async function confirmReassign(){
     if(_reassignTargetId == null) return;
     const sel = document.getElementById("reassignUserSelect");
     const email = sel ? sel.value : "";
-    if(!email){ return; }
+    if(!email) return;
     const users = getStoredUsers();
     const chosenUser = users.find(u => (u.Email||"").toLowerCase() === email.toLowerCase());
-    if(!chosenUser){ return; }
+    if(!chosenUser) return;
     allItems = getStoredBrokers();
     const idx = allItems.findIndex(i => String(i.Id) === String(_reassignTargetId));
-    if(idx !== -1){
-        allItems[idx].AssignedTo = { Title: chosenUser.Title || chosenUser.Email, EMail: chosenUser.Email };
-        allItems[idx].IsNotSuitable = false;
-        allItems[idx].Modified = new Date().toISOString();
-        saveStoredBrokers(allItems);
-        logAuditRecord(allItems[idx], "ADMIN_REASSIGN", `Reassigned to ${chosenUser.Title || chosenUser.Email} by admin`);
+    if(idx === -1){ closeReassignModal(); reload(); return; }
+
+    const broker = allItems[idx];
+    const assignedTitle = chosenUser.Title || chosenUser.Email;
+    const assignedEmail = chosenUser.Email || "";
+    try{
+        if(m365Configured() && !isDemoMode()){
+            // Reassignment updates the existing SharePoint item directly.
+            // Do not use the generic local-save path here because a missing
+            // local SP ID map can otherwise turn an update into a POST.
+            const current = await cloudGetCurrentBroker(_reassignTargetId);
+            if(!current) throw new Error("This broker could not be located in Microsoft Lists. Refresh the broker data and try again.");
+            if(isNotSuitable(current.broker)) throw new Error("This broker is currently marked Not Suitable and cannot be assigned.");
+            const now = new Date().toISOString();
+            const patch = {
+                AssignedTo: assignedTitle + (assignedEmail ? " <" + assignedEmail + ">" : ""),
+                AssignedToEmail: assignedEmail,
+                AssignedToName: assignedTitle,
+                IsNotSuitable: "No",
+                Modified: now,
+                ClaimedAt: "",
+                ClaimedBy: "",
+                ClaimExpiresAt: ""
+            };
+            const sid = await getSiteId();
+            const listId = await resolveListId(getListName("brokers"));
+            await graphPatch(`${GRAPH_BASE}/sites/${sid}/lists/${listId}/items/${current.spId}/fields`, filterBrokerFieldsForColumns(patch, await getBrokerColumnNames()), current.etag || undefined);
+            const fresh = await cloudLoadBrokers();
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(fresh));
+            _brokerSnapshot = _snapshotBrokers(fresh);
+            allItems = fresh;
+            const updated = fresh.find(i => String(i.Id) === String(_reassignTargetId)) || Object.assign({}, broker, {AssignedTo:{Title:assignedTitle,EMail:assignedEmail},IsNotSuitable:false,Modified:now});
+            logAuditRecord(updated, "ADMIN_REASSIGN", `Reassigned to ${assignedTitle} by admin`);
+        }else{
+            broker.AssignedTo = { Title: assignedTitle, EMail: assignedEmail };
+            broker.IsNotSuitable = false;
+            broker.Modified = new Date().toISOString();
+            saveStoredBrokers(allItems);
+            logAuditRecord(broker, "ADMIN_REASSIGN", `Reassigned to ${assignedTitle} by admin`);
+        }
+        closeReassignModal();
+        reload();
+    }catch(e){
+        alert(e.message || "Unable to reassign this broker.");
+        closeReassignModal();
+        if(m365Configured() && !isDemoMode()){
+            try{ const fresh=await cloudLoadBrokers(); localStorage.setItem(STORAGE_KEY,JSON.stringify(fresh)); _brokerSnapshot=_snapshotBrokers(fresh); allItems=fresh; }catch(_){}
+        }
+        reload();
     }
-    closeReassignModal();
-    reload();
 }
 
 /* ---- Log Deal modal ---- */
@@ -2374,37 +2423,33 @@ function buildPreview(){
     area.innerHTML = html;
 }
 
-document.getElementById("submitUploadBtn").addEventListener("click", () => {
+document.getElementById("submitUploadBtn").addEventListener("click", async () => {
     const status = document.getElementById("uploadStatus");
     const btn = document.getElementById("submitUploadBtn");
     if(btn.disabled) return;
-    btn.disabled = true;
 
-    // IMPORTANT: update the in-memory duplicate index as each row is accepted.
-    // The old implementation compared every row against the original database only,
-    // so duplicate rows inside the same uploaded file could all be inserted.
+    // Build the import plan first. Nothing is written to local storage or SharePoint
+    // until the user explicitly confirms the validated batch.
     let existingBrokers = getStoredBrokers();
     const emailKeys = new Set(existingBrokers.map(b => String(b.Email||"").trim().toLowerCase()).filter(Boolean));
     const phoneKeys = new Set(existingBrokers.map(b => dialerSanitizePhone(b.Phone||"")).filter(Boolean));
     const rowKeys = new Set();
-    let created = 0, duplicatesSkipped = 0, blankSkipped = 0;
+    const pending = [];
+    let duplicatesSkipped = 0, blankSkipped = 0;
 
     parsedRows.forEach(row => {
         const email = columnMapping.email ? String(row[columnMapping.email] ?? "").trim().toLowerCase() : "";
         const phone = columnMapping.phone ? dialerSanitizePhone(String(row[columnMapping.phone] ?? "")) : "";
         const name = columnMapping.name ? String(row[columnMapping.name] ?? "").trim() : "";
         const company = columnMapping.company ? String(row[columnMapping.company] ?? "").trim() : "";
-
-        // Ignore completely blank rows instead of creating empty broker records.
         if(!name && !company && !email && !phone){ blankSkipped++; return; }
 
-        // Check against both existing records AND rows already accepted from this file.
         const composite = [email, phone, name.toLowerCase(), company.toLowerCase()].join("|");
         const duplicate = (email && emailKeys.has(email)) || (phone && phoneKeys.has(phone)) || rowKeys.has(composite);
         if(duplicate){ duplicatesSkipped++; return; }
 
         const rawLoanTypes = columnMapping.loanTypes ? String(row[columnMapping.loanTypes] ?? "") : "Residential Bridging";
-        const body = {
+        pending.push(buildLocalBroker({
             Title:name, Company:company,
             Phone:columnMapping.phone ? String(row[columnMapping.phone] ?? "") : "",
             Email:columnMapping.email ? String(row[columnMapping.email] ?? "") : "",
@@ -2418,28 +2463,65 @@ document.getElementById("submitUploadBtn").addEventListener("click", () => {
             Network:columnMapping.network ? String(row[columnMapping.network] ?? "") : "",
             Status:columnMapping.status ? String(row[columnMapping.status] ?? "Cold") : "Cold",
             NextFollowUp:columnMapping.nextFollowUp ? String(row[columnMapping.nextFollowUp] ?? "") : ""
-        };
-        const newItem = buildLocalBroker(body);
-        existingBrokers.push(newItem);
-        created++;
+        }));
         if(email) emailKeys.add(email);
         if(phone) phoneKeys.add(phone);
         rowKeys.add(composite);
     });
 
-    // Persist and cloud-sync the entire spreadsheet as ONE batch. This avoids
-    // overlapping Microsoft Graph POSTs and is substantially faster for large files.
-    if(created > 0){
-        allItems = existingBrokers;
-        saveStoredBrokers(existingBrokers);
-        existingBrokers.slice(-created).forEach(item =>
-            logAuditRecord(item, "CREATE", "Created new broker record via Excel import")
-        );
+    if(!pending.length){
+        status.textContent = `Nothing to import. Skipped ${duplicatesSkipped} duplicate row(s)${blankSkipped ? ` and ${blankSkipped} blank row(s)` : ""}.`;
+        return;
     }
 
-    status.textContent = `Completed: Created ${created} new record(s). Skipped ${duplicatesSkipped} duplicate row(s)${blankSkipped ? ` and ${blankSkipped} blank row(s)` : ""}.`;
-    btn.disabled = false;
-    reload();
+    const cloudMode = m365Configured() && !isDemoMode();
+    const confirmed = window.confirm(
+        `Import ${pending.length} new broker record(s)?\n\n` +
+        `Duplicates skipped: ${duplicatesSkipped}\n` +
+        `Blank rows skipped: ${blankSkipped}\n\n` +
+        (cloudMode
+            ? "The records will be saved locally first, then uploaded to Microsoft Lists once. They will NOT be deleted automatically."
+            : "The records will be saved locally only in Demo/Local mode.")
+    );
+    if(!confirmed) return;
+
+    btn.disabled = true;
+    btn.textContent = "Importing…";
+    status.textContent = `Preparing ${pending.length} broker record(s)…`;
+
+    try{
+        // Commit locally once. The cloud write is deliberately separate so a failed
+        // Graph request cannot trigger a hidden retry or a second local insert.
+        existingBrokers = existingBrokers.concat(pending);
+        allItems = existingBrokers;
+        saveStoredBrokers(existingBrokers, false);
+        pending.forEach(item => logAuditRecord(item, "CREATE", "Created new broker record via Excel import"));
+
+        if(cloudMode){
+            status.textContent = `Uploading ${pending.length} broker record(s) to Microsoft Lists…`;
+            await queueBrokerCloudSync(existingBrokers);
+
+            // Verify every imported broker received a SharePoint item id. Do not
+            // retry failed records here: retrying a POST blindly is exactly what
+            // caused the duplicate-record problem this importer is designed to avoid.
+            const map = getBrokerIdMap();
+            const missing = pending.filter(item => !map[item.Id]);
+            if(missing.length){
+                throw new Error(`${missing.length} imported broker record(s) were saved locally but did not receive a Microsoft Lists item ID. No automatic retry was performed.`);
+            }
+            status.textContent = `Import complete: ${pending.length} broker record(s) created and verified in Microsoft Lists. Skipped ${duplicatesSkipped} duplicate row(s)${blankSkipped ? ` and ${blankSkipped} blank row(s)` : ""}.`;
+        }else{
+            status.textContent = `Import complete: ${pending.length} broker record(s) saved locally. Skipped ${duplicatesSkipped} duplicate row(s)${blankSkipped ? ` and ${blankSkipped} blank row(s)` : ""}.`;
+        }
+        reload();
+    }catch(e){
+        console.error("Excel broker import failed:", e);
+        status.textContent = `Import saved locally, but Microsoft Lists sync was not fully completed: ${e.message||e}. No automatic retry or deletion was performed.`;
+        reload();
+    }finally{
+        btn.disabled = false;
+        btn.textContent = "Create broker records";
+    }
 });
 
 function downloadListTemplate(){
