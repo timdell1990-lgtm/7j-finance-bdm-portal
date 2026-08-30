@@ -384,59 +384,6 @@ async function testListConnection(displayName){
         return { ok: false, error: (e.message || String(e)) };
     }
 }
-
-/* ---- Expected SharePoint columns per list, used only by the Admin Centre's
-   "Test" report so missing columns show up before brokers/users/deals/etc.
-   start failing to save. This never restricts what the app writes — see
-   filterBrokerFieldsForColumns for the fields already tolerated as optional
-   at save time (those are also marked optional below so they don't show as
-   errors). Internal column names are compared case-insensitively against
-   both a column's internal `name` and its `displayName`, since a column
-   created through the SharePoint UI keeps whichever the person typed. */
-const LIST_EXPECTED_COLUMNS = {
-    brokers: {
-        required: ["Title","Company","Phone","Email","Website","Address","City","Notes","PrefComm","LoanTypes","Volume","Network","Status","NextFollowUp","LastContactDate","AssignedTo","AssignedToEmail","AssignedToName","IsNotSuitable","PortalId","NotSuitableReason","DiallerOutcome","DiallerOutcomeReason","DiallerOutcomeDate","NotSuitableSource"],
-        optional: ["WorkflowStateUpdatedAt","ClaimedAt","ClaimedBy","ClaimExpiresAt","AssignedToLookupId"]
-    },
-    users: { required: ["Title","Email","Role","PortalId"], optional: [] },
-    auditAccount: { required: ["Title","Timestamp","User","RecordTitle","Company","Reason","RecordId"], optional: [] },
-    auditDialer: { required: ["Title","Timestamp","User","RecordTitle","Company","Reason","RecordId"], optional: [] },
-    deals: { required: ["Title","Company","BrokerName","BrokerId","DealValue","DealDate","LoanType","BDM","Notes","PortalId"], optional: [] },
-    globalSettings: { required: ["Title","SettingKey","SettingValue","Updated","UpdatedBy"], optional: [] },
-    callGuide: { required: ["Title","SectionKey","Content","SortOrder","Active","Updated","UpdatedBy"], optional: [] },
-    performanceReviews: { required: ["Title","ReviewId","BDMName","BDMEmail","ReviewDate","ReviewPeriod","Target","AdminNote","BDMResponse","ResponseDate","AdminBy","Updated","UpdatedBy"], optional: [] },
-    kpiSnapshots: { required: ["Title","SnapshotId","SnapshotDate","BDM","Period","CustomStart","CustomEnd","TotalCalls","Appointments","Deals","DealValue","NotSuitable","UpdatedBy"], optional: [] },
-    backupManifest: { required: ["Title","BackupDate","Version","CreatedBy","ListsJSON","DataSetsJSON"], optional: [] }
-};
-
-// Fetch a list's actual column names (internal `name` + `displayName`, lowercased) via Graph.
-async function fetchListColumnNames(listId){
-    const sid = await getSiteId();
-    const data = await graphGet(`${GRAPH_BASE}/sites/${sid}/lists/${listId}/columns?$select=name,displayName&$top=200`);
-    const names = new Set();
-    (data.value||[]).forEach(c=>{
-        if(c.name) names.add(String(c.name).toLowerCase());
-        if(c.displayName) names.add(String(c.displayName).toLowerCase());
-    });
-    return names;
-}
-
-// Like testListConnection, but once the list is found, also reports which of
-// the portal's expected columns (LIST_EXPECTED_COLUMNS) are missing from it.
-async function testListConnectionWithColumns(displayName, listKey){
-    const base = await testListConnection(displayName);
-    if(!base.ok) return base;
-    const expected = LIST_EXPECTED_COLUMNS[listKey];
-    if(!expected) return base;
-    try{
-        const existing = await fetchListColumnNames(base.id);
-        const missingRequired = expected.required.filter(c => !existing.has(c.toLowerCase()));
-        const missingOptional = expected.optional.filter(c => !existing.has(c.toLowerCase()));
-        return Object.assign({}, base, { missingRequired, missingOptional });
-    }catch(e){
-        return Object.assign({}, base, { columnCheckError: (e.message || String(e)) });
-    }
-}
 async function resolveListId(displayName){
     if(_listIdCache[displayName]) return _listIdCache[displayName];
     const sid = await getSiteId();
@@ -550,7 +497,22 @@ function filterBrokerFieldsForColumns(fields,columns){
 }
 async function cloudPushBroker(b){
     const sid=await getSiteId(), listId=await resolveListId(getListName("brokers")), map=getBrokerIdMap();
-    const fields=filterBrokerFieldsForColumns(brokerToFields(b),await getBrokerColumnNames()); const spId=map[b.Id];
+    const fields=filterBrokerFieldsForColumns(brokerToFields(b),await getBrokerColumnNames());
+    let spId=map[b.Id] || _brokerMeta[b.Id]?.spId;
+    // Recover a missing/stale SharePoint item ID before attempting a POST.
+    // This prevents an existing broker being recreated when the local ID map
+    // is lost or out of date during assignment/reassignment.
+    if(!spId){
+        try{
+            const data=await graphGet(`${GRAPH_BASE}/sites/${sid}/lists/${listId}/items?expand=fields&$top=500`);
+            const found=(data.value||[]).find(it=>String(it.fields?.PortalId||"")===String(b.Id));
+            if(found){
+                spId=found.id;
+                map[b.Id]=spId; setBrokerIdMap(map);
+                _brokerMeta[b.Id]={spId:found.id,etag:found["@odata.etag"]||""};
+            }
+        }catch(_){}
+    }
     if(spId){
         const etag=_brokerMeta[b.Id]?.etag||"";
         try{ await graphPatch(`${GRAPH_BASE}/sites/${sid}/lists/${listId}/items/${spId}/fields`,fields,etag||undefined); }
