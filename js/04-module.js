@@ -246,10 +246,23 @@ function getStoredBrokers() {
     return items;
 }
 
+// Broker cloud writes must be serialised. Bulk imports previously launched one
+// fire-and-forget sync per row, so several overlapping syncs could all see the
+// same broker as "new" and POST it to Microsoft Lists more than once.
+let _brokerSyncQueue = Promise.resolve();
+function queueBrokerCloudSync(items){
+    // Capture this save state now so later local mutations do not change a queued job.
+    const snapshot = JSON.parse(JSON.stringify(items || []));
+    _brokerSyncQueue = _brokerSyncQueue
+        .catch(() => {}) // a failed earlier sync must not permanently block later saves
+        .then(() => cloudSyncBrokers(snapshot));
+    _brokerSyncQueue.catch(e => showCloudError(e));
+    return _brokerSyncQueue;
+}
+
 function saveStoredBrokers(items) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-    // Fire-and-forget sync of changed brokers to the BDM Brokers list
-    cloudSyncBrokers(items).catch(e => showCloudError(e));
+    queueBrokerCloudSync(items);
 }
 
 // Snapshot used to detect which broker records changed since last sync
@@ -1857,10 +1870,9 @@ async function release(){
     try{await setBrokerOpenState(localId,"Released from My Brokers back to Open Brokers");reload();document.getElementById("detailOverlay").classList.remove("show");detailInitialSnapshot=null;detailDirty=false;}catch(e){alert(e.message||"Could not release this broker.");}
 }
 
-function createItemLocal(body){
-    allItems = getStoredBrokers();
-    const newItem = {
-        Id: Date.now() + Math.floor(Math.random() * 1000),
+function buildLocalBroker(body){
+    return {
+        Id: Date.now() + Math.floor(Math.random() * 1000000),
         Modified: new Date().toISOString(),
         Title: body.Title || "",
         Company: body.Company || "",
@@ -1880,9 +1892,15 @@ function createItemLocal(body){
         AssignedTo: null,
         IsNotSuitable: false
     };
+}
+
+function createItemLocal(body){
+    allItems = getStoredBrokers();
+    const newItem = buildLocalBroker(body);
     allItems.push(newItem);
     saveStoredBrokers(allItems);
     logAuditRecord(newItem, "CREATE", "Created new broker record");
+    return newItem;
 }
 
 function deleteItemLocal(id, reason = "Deleted by admin"){
@@ -2401,12 +2419,23 @@ document.getElementById("submitUploadBtn").addEventListener("click", () => {
             Status:columnMapping.status ? String(row[columnMapping.status] ?? "Cold") : "Cold",
             NextFollowUp:columnMapping.nextFollowUp ? String(row[columnMapping.nextFollowUp] ?? "") : ""
         };
-        createItemLocal(body);
+        const newItem = buildLocalBroker(body);
+        existingBrokers.push(newItem);
         created++;
         if(email) emailKeys.add(email);
         if(phone) phoneKeys.add(phone);
         rowKeys.add(composite);
     });
+
+    // Persist and cloud-sync the entire spreadsheet as ONE batch. This avoids
+    // overlapping Microsoft Graph POSTs and is substantially faster for large files.
+    if(created > 0){
+        allItems = existingBrokers;
+        saveStoredBrokers(existingBrokers);
+        existingBrokers.slice(-created).forEach(item =>
+            logAuditRecord(item, "CREATE", "Created new broker record via Excel import")
+        );
+    }
 
     status.textContent = `Completed: Created ${created} new record(s). Skipped ${duplicatesSkipped} duplicate row(s)${blankSkipped ? ` and ${blankSkipped} blank row(s)` : ""}.`;
     btn.disabled = false;
